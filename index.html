@@ -18,7 +18,7 @@
             </div>
             <div>
                 <h1 class="font-bold text-lg leading-tight">Notes Chat 1GCX</h1>
-                <p id="sync-status" class="text-xs text-indigo-200">Menyimpan secara lokal</p>
+                <p id="sync-status" class="text-xs text-indigo-200">Auto-refresh aktif</p>
             </div>
         </div>
         <div class="flex items-center space-x-2">
@@ -82,6 +82,13 @@
             if (SCRIPT_URL) {
                 fetchFromCloud(true);
             }
+            
+            // Set Auto-Refresh setiap 10 detik sekali secara senyap di background
+            setInterval(() => {
+                if (SCRIPT_URL) {
+                    fetchFromCloud(true);
+                }
+            }, 10000);
         };
 
         function autoResize(textarea) {
@@ -100,6 +107,9 @@
                 `;
                 return;
             }
+
+            // Pertahankan posisi scroll jika user sedang melihat ke atas
+            const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
 
             container.innerHTML = notes.map((note) => {
                 const dateObj = new Date(note.updatedAt || Date.now());
@@ -121,7 +131,10 @@
                     </div>
                 `;
             }).join('');
-            container.scrollTop = container.scrollHeight;
+
+            if (isScrolledToBottom) {
+                container.scrollTop = container.scrollHeight;
+            }
         }
 
         function addNewNote() {
@@ -157,7 +170,6 @@
                 localStorage.setItem('notes_chat_1gcx', JSON.stringify(notes));
                 renderNotes();
 
-                // Hapus dari cloud
                 if (SCRIPT_URL) {
                     const statusEl = document.getElementById('sync-status');
                     statusEl.innerText = "Menghapus di Spreadsheet...";
@@ -168,7 +180,6 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ action: 'delete', id: id })
                     }).then(() => {
-                        // Lakukan full sync untuk memastikan data selalu selaras
                         syncToCloud();
                     }).catch(err => {
                         statusEl.innerText = "Gagal hapus di cloud";
@@ -214,8 +225,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'sync', notes: notes })
             }).then(() => {
-                statusEl.innerText = "Tersinkron dengan Spreadsheet";
-                setTimeout(() => { statusEl.innerText = "Online (Tersimpan)"; }, 3000);
+                statusEl.innerText = "Auto-refresh aktif";
             }).catch(err => {
                 statusEl.innerText = "Gagal sinkron (Mode Offline)";
             });
@@ -230,14 +240,17 @@
                 .then(res => res.json())
                 .then(res => {
                     if (res.status === 'success' && Array.isArray(res.data)) {
-                        notes = res.data;
-                        localStorage.setItem('notes_chat_1gcx', JSON.stringify(notes));
-                        renderNotes();
-                        statusEl.innerText = "Tersinkron dengan Spreadsheet";
+                        // Cek apakah ada perubahan data sebelum re-render agar kursor/scroll nyaman
+                        if (JSON.stringify(notes) !== JSON.stringify(res.data)) {
+                            notes = res.data;
+                            localStorage.setItem('notes_chat_1gcx', JSON.stringify(notes));
+                            renderNotes();
+                        }
+                        statusEl.innerText = "Auto-refresh aktif";
                     }
                 })
                 .catch(() => {
-                    statusEl.innerText = "Menggunakan data lokal";
+                    if (!isBackground) statusEl.innerText = "Menggunakan data lokal";
                 });
         }
 
