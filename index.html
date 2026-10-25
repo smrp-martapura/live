@@ -36,38 +36,49 @@
 
     <!-- Chat Container / Daftar Catatan -->
     <main id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl w-full mx-auto">
-        <!-- Chat bubbles akan dimuat di sini secara dinamis -->
+        <!-- Chat bubbles akan dimuat di sini -->
     </main>
 
     <!-- Input Area (Chat Box) -->
     <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 p-3 shadow-lg">
-        <div class="max-w-2xl mx-auto flex items-end gap-2">
-            <div class="flex-1 bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2 border border-slate-300 dark:border-slate-600 focus-within:ring-2 focus-within:ring-indigo-500">
-                <input type="text" id="note-title" placeholder="Judul catatan / topik... (Opsional)" class="w-full bg-transparent text-sm font-semibold focus:outline-none mb-1 border-b border-slate-200 dark:border-slate-600 pb-1">
-                <textarea id="note-content" rows="1" placeholder="Tulis catatan atau ide di sini..." class="w-full bg-transparent text-sm focus:outline-none resize-none max-h-32" oninput="autoResize(this)"></textarea>
+        <div class="max-w-2xl mx-auto flex flex-col gap-2">
+            <!-- Indikator file terpilih -->
+            <div id="file-preview-box" class="hidden items-center justify-between bg-slate-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg text-xs">
+                <span id="file-preview-name" class="truncate font-medium"></span>
+                <button onclick="removeAttachedFile()" class="text-red-500 hover:text-red-700 ml-2"><i class="fa-solid fa-xmark text-sm"></i></button>
             </div>
-            <button onclick="addNewNote()" class="bg-indigo-600 hover:bg-indigo-700 text-white w-11 h-11 rounded-full flex items-center justify-center shadow transition shrink-0">
-                <i class="fa-solid fa-paper-plane text-sm"></i>
-            </button>
+
+            <div class="flex items-end gap-2">
+                <!-- Tombol Lampiran File -->
+                <label for="file-input" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 w-11 h-11 rounded-full flex items-center justify-center cursor-pointer transition shrink-0" title="Lampirkan File/Gambar">
+                    <i class="fa-solid fa-paperclip text-sm"></i>
+                </label>
+                <input type="file" id="file-input" class="hidden" onchange="handleFileSelect(this)">
+
+                <div class="flex-1 bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2 border border-slate-300 dark:border-slate-600 focus-within:ring-2 focus-within:ring-indigo-500">
+                    <input type="text" id="note-title" placeholder="Judul catatan / topik... (Opsional)" class="w-full bg-transparent text-sm font-semibold focus:outline-none mb-1 border-b border-slate-200 dark:border-slate-600 pb-1">
+                    <textarea id="note-content" rows="1" placeholder="Tulis catatan atau lampirkan file..." class="w-full bg-transparent text-sm focus:outline-none resize-none max-h-32" oninput="autoResize(this)"></textarea>
+                </div>
+                <button onclick="addNewNote()" id="btn-send" class="bg-indigo-600 hover:bg-indigo-700 text-white w-11 h-11 rounded-full flex items-center justify-center shadow transition shrink-0">
+                    <i class="fa-solid fa-paper-plane text-sm"></i>
+                </button>
+            </div>
         </div>
     </footer>
 
-    <!-- Modal Pengaturan URL Web App -->
+    <!-- Modal Pengaturan -->
     <div id="settings-modal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center p-4 z-50">
         <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h2 class="text-lg font-bold flex items-center gap-2">
                 <i class="fa-solid fa-link text-indigo-600"></i> Hubungkan ke Spreadsheet
             </h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
-                Masukkan URL Web App dari Google Apps Script spreadsheet Anda agar catatan tersinkron otomatis antar HP dan PC.
-            </p>
             <div>
                 <label class="block text-xs font-semibold mb-1">Google Apps Script Web App URL</label>
                 <input type="text" id="script-url" placeholder="https://script.google.com/macros/s/.../exec" class="w-full text-xs p-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
             <div class="flex justify-end gap-2 pt-2">
-                <button onclick="closeSettings()" class="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 transition">Batal</button>
-                <button onclick="saveSettings()" class="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">Simpan & Tarik Data</button>
+                <button onclick="closeSettings()" class="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-200 dark:bg-slate-700">Batal</button>
+                <button onclick="saveSettings()" class="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white">Simpan & Tarik Data</button>
             </div>
         </div>
     </div>
@@ -76,24 +87,33 @@
     <script>
         let notes = JSON.parse(localStorage.getItem('notes_chat_1gcx')) || [];
         let SCRIPT_URL = localStorage.getItem('notes_script_url') || 'https://script.google.com/macros/s/AKfycbyZtO8hBRVfSUCgtB2V_h65T7Y-TIp3Qve6NpczuDdNBrOlzF2HznLvGbzy_EWW39KaRg/exec';
+        let selectedFile = null;
 
         window.onload = () => {
             renderNotes();
-            if (SCRIPT_URL) {
-                fetchFromCloud(true);
-            }
-            
-            // Set Auto-Refresh setiap 10 detik sekali secara senyap di background
-            setInterval(() => {
-                if (SCRIPT_URL) {
-                    fetchFromCloud(true);
-                }
-            }, 10000);
+            if (SCRIPT_URL) fetchFromCloud(true);
+            setInterval(() => { if (SCRIPT_URL) fetchFromCloud(true); }, 10000);
         };
 
         function autoResize(textarea) {
             textarea.style.height = 'auto';
             textarea.style.height = (textarea.scrollHeight) + 'px';
+        }
+
+        function handleFileSelect(input) {
+            if (input.files && input.files[0]) {
+                selectedFile = input.files[0];
+                document.getElementById('file-preview-name').innerText = "Lampiran: " + selectedFile.name;
+                document.getElementById('file-preview-box').classList.remove('hidden');
+                document.getElementById('file-preview-box').classList.add('flex');
+            }
+        }
+
+        function removeAttachedFile() {
+            selectedFile = null;
+            document.getElementById('file-input').value = '';
+            document.getElementById('file-preview-box').classList.add('hidden');
+            document.getElementById('file-preview-box').classList.remove('flex');
         }
 
         function renderNotes() {
@@ -102,13 +122,12 @@
                 container.innerHTML = `
                     <div class="flex flex-col items-center justify-center h-full text-center text-slate-400 mt-20">
                         <i class="fa-regular fa-comment-dots text-4xl mb-2"></i>
-                        <p class="text-sm">Belum ada catatan. Mulai ketik catatan pertama Anda di bawah!</p>
+                        <p class="text-sm">Belum ada catatan. Ketik catatan atau lampirkan file di bawah!</p>
                     </div>
                 `;
                 return;
             }
 
-            // Pertahankan posisi scroll jika user sedang melihat ke atas
             const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
 
             container.innerHTML = notes.map((note) => {
@@ -116,11 +135,22 @@
                 const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const dateStr = dateObj.toLocaleDateString([], { day: 'numeric', month: 'short' });
 
+                let fileHtml = '';
+                if (note.fileUrl) {
+                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(note.fileName);
+                    if (isImage) {
+                        fileHtml = `<div class="mt-2"><a href="${note.fileUrl}" target="_blank"><img src="${note.fileUrl}" class="rounded-lg max-h-48 object-cover w-full hover:opacity-95 transition"></a></div>`;
+                    } else {
+                        fileHtml = `<div class="mt-2 bg-indigo-700/50 p-2 rounded-lg flex items-center gap-2"><i class="fa-solid fa-file-arrow-down"></i><a href="${note.fileUrl}" target="_blank" class="text-xs underline truncate">${escapeHtml(note.fileName)}</a></div>`;
+                    }
+                }
+
                 return `
                     <div class="flex flex-col items-end">
                         <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-none px-4 py-3 max-w-[85%] sm:max-w-[75%] shadow-sm space-y-1 relative group transition-all">
                             ${note.title ? `<div class="font-bold text-sm border-b border-indigo-500/50 pb-1 mb-1">${escapeHtml(note.title)}</div>` : ''}
-                            <div class="text-sm whitespace-pre-wrap leading-relaxed">${escapeHtml(note.content)}</div>
+                            ${note.content ? `<div class="text-sm whitespace-pre-wrap leading-relaxed">${escapeHtml(note.content)}</div>` : ''}
+                            ${fileHtml}
                             <div class="flex items-center justify-end gap-2 pt-1">
                                 <span class="text-[10px] text-indigo-200">${dateStr}, ${timeStr}</span>
                                 <button onclick="deleteNote('${note.id}')" class="text-indigo-200 hover:text-red-300 transition text-xs ml-1" title="Hapus catatan">
@@ -132,27 +162,53 @@
                 `;
             }).join('');
 
-            if (isScrolledToBottom) {
-                container.scrollTop = container.scrollHeight;
-            }
+            if (isScrolledToBottom) container.scrollTop = container.scrollHeight;
         }
 
-        function addNewNote() {
+        async function addNewNote() {
             const titleInput = document.getElementById('note-title');
             const contentInput = document.getElementById('note-content');
+            const sendBtn = document.getElementById('btn-send');
             
             const title = titleInput.value.trim();
             const content = contentInput.value.trim();
 
-            if (!content) return;
+            if (!content && !selectedFile) return;
+
+            sendBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-sm"></i>`;
+            sendBtn.disabled = true;
+
+            let fileUrl = "";
+            let fileName = "";
+
+            if (selectedFile) {
+                try {
+                    const base64Data = await toBase64(selectedFile);
+                    const res = await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'upload_file',
+                            base64: base64Data,
+                            mimeType: selectedFile.type,
+                            fileName: selectedFile.name
+                        })
+                    });
+                    const result = await res.json();
+                    if (result.status === 'success') {
+                        fileUrl = result.fileUrl;
+                        fileName = result.fileName;
+                    }
+                } catch (err) {
+                    alert("Gagal mengunggah file. Catatan akan disimpan tanpa file.");
+                }
+            }
 
             const newNote = {
                 id: 'note_' + Date.now(),
                 title: title,
                 content: content,
-                category: 'Chat',
-                color: '#indigo',
-                isPinned: false,
+                fileUrl: fileUrl,
+                fileName: fileName,
                 updatedAt: new Date().toISOString()
             };
 
@@ -162,6 +218,18 @@
             titleInput.value = '';
             contentInput.value = '';
             contentInput.style.height = 'auto';
+            removeAttachedFile();
+            sendBtn.innerHTML = `<i class="fa-solid fa-paper-plane text-sm"></i>`;
+            sendBtn.disabled = false;
+        }
+
+        function toBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
         }
 
         function deleteNote(id) {
@@ -171,19 +239,12 @@
                 renderNotes();
 
                 if (SCRIPT_URL) {
-                    const statusEl = document.getElementById('sync-status');
-                    statusEl.innerText = "Menghapus di Spreadsheet...";
-                    
                     fetch(SCRIPT_URL, {
                         method: 'POST',
                         mode: 'no-cors',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ action: 'delete', id: id })
-                    }).then(() => {
-                        syncToCloud();
-                    }).catch(err => {
-                        statusEl.innerText = "Gagal hapus di cloud";
-                    });
+                    }).then(() => syncToCloud());
                 }
             }
         }
@@ -191,9 +252,7 @@
         function saveAndSync() {
             localStorage.setItem('notes_chat_1gcx', JSON.stringify(notes));
             renderNotes();
-            if (SCRIPT_URL) {
-                syncToCloud();
-            }
+            if (SCRIPT_URL) syncToCloud();
         }
 
         function openSettings() {
@@ -209,49 +268,32 @@
             SCRIPT_URL = document.getElementById('script-url').value.trim();
             localStorage.setItem('notes_script_url', SCRIPT_URL);
             closeSettings();
-            if (SCRIPT_URL) {
-                fetchFromCloud(false);
-            }
+            if (SCRIPT_URL) fetchFromCloud(false);
         }
 
         function syncToCloud() {
             if (!SCRIPT_URL) return;
-            const statusEl = document.getElementById('sync-status');
-            statusEl.innerText = "Menyinkronkan...";
-
             fetch(SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'sync', notes: notes })
-            }).then(() => {
-                statusEl.innerText = "Auto-refresh aktif";
-            }).catch(err => {
-                statusEl.innerText = "Gagal sinkron (Mode Offline)";
             });
         }
 
-        function fetchFromCloud(isBackground = false) {
+        function fetchFromCloud(isBg = false) {
             if (!SCRIPT_URL) return;
-            const statusEl = document.getElementById('sync-status');
-            if (!isBackground) statusEl.innerText = "Memuat data...";
-
             fetch(SCRIPT_URL + '?action=read')
                 .then(res => res.json())
                 .then(res => {
                     if (res.status === 'success' && Array.isArray(res.data)) {
-                        // Cek apakah ada perubahan data sebelum re-render agar kursor/scroll nyaman
                         if (JSON.stringify(notes) !== JSON.stringify(res.data)) {
                             notes = res.data;
                             localStorage.setItem('notes_chat_1gcx', JSON.stringify(notes));
                             renderNotes();
                         }
-                        statusEl.innerText = "Auto-refresh aktif";
                     }
-                })
-                .catch(() => {
-                    if (!isBackground) statusEl.innerText = "Menggunakan data lokal";
-                });
+                }).catch(() => {});
         }
 
         function escapeHtml(text) {
