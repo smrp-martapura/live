@@ -22,6 +22,9 @@
             </div>
         </div>
         <div class="flex items-center space-x-2">
+            <button onclick="fetchFromCloud()" title="Muat Ulang Data" class="p-2 hover:bg-indigo-700 dark:hover:bg-slate-700 rounded-full transition">
+                <i class="fa-solid fa-rotate text-lg"></i>
+            </button>
             <button onclick="syncToCloud()" id="btn-sync" title="Sinkronisasi ke Spreadsheet" class="p-2 hover:bg-indigo-700 dark:hover:bg-slate-700 rounded-full transition relative">
                 <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
             </button>
@@ -72,7 +75,7 @@
     <!-- Script Aplikasi -->
     <script>
         let notes = JSON.parse(localStorage.getItem('notes_chat_1gcx')) || [];
-        let SCRIPT_URL = localStorage.getItem('notes_script_url') || '';
+        let SCRIPT_URL = localStorage.getItem('notes_script_url') || 'https://script.google.com/macros/s/AKfycbyZtO8hBRVfSUCgtB2V_h65T7Y-TIp3Qve6NpczuDdNBrOlzF2HznLvGbzy_EWW39KaRg/exec';
 
         window.onload = () => {
             renderNotes();
@@ -98,16 +101,19 @@
                 return;
             }
 
-            container.innerHTML = notes.map((note, index) => {
-                const dateStr = new Date(note.updatedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            container.innerHTML = notes.map((note) => {
+                const dateObj = new Date(note.updatedAt || Date.now());
+                const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const dateStr = dateObj.toLocaleDateString([], { day: 'numeric', month: 'short' });
+
                 return `
                     <div class="flex flex-col items-end">
-                        <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-none px-4 py-3 max-w-[85%] shadow-sm space-y-1 relative group">
+                        <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-none px-4 py-3 max-w-[85%] sm:max-w-[75%] shadow-sm space-y-1 relative group transition-all">
                             ${note.title ? `<div class="font-bold text-sm border-b border-indigo-500/50 pb-1 mb-1">${escapeHtml(note.title)}</div>` : ''}
                             <div class="text-sm whitespace-pre-wrap leading-relaxed">${escapeHtml(note.content)}</div>
                             <div class="flex items-center justify-end gap-2 pt-1">
-                                <span class="text-[10px] text-indigo-200">${dateStr}</span>
-                                <button onclick="deleteNote('${note.id}')" class="text-indigo-200 hover:text-white opacity-0 group-hover:opacity-100 transition text-xs" title="Hapus catatan">
+                                <span class="text-[10px] text-indigo-200">${dateStr}, ${timeStr}</span>
+                                <button onclick="deleteNote('${note.id}')" class="text-indigo-200 hover:text-red-300 transition text-xs ml-1" title="Hapus catatan">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </div>
@@ -148,7 +154,26 @@
         function deleteNote(id) {
             if (confirm("Hapus catatan ini?")) {
                 notes = notes.filter(n => n.id !== id);
-                saveAndSync();
+                localStorage.setItem('notes_chat_1gcx', JSON.stringify(notes));
+                renderNotes();
+
+                // Hapus dari cloud
+                if (SCRIPT_URL) {
+                    const statusEl = document.getElementById('sync-status');
+                    statusEl.innerText = "Menghapus di Spreadsheet...";
+                    
+                    fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'delete', id: id })
+                    }).then(() => {
+                        // Lakukan full sync untuk memastikan data selalu selaras
+                        syncToCloud();
+                    }).catch(err => {
+                        statusEl.innerText = "Gagal hapus di cloud";
+                    });
+                }
             }
         }
 
@@ -205,11 +230,9 @@
                 .then(res => res.json())
                 .then(res => {
                     if (res.status === 'success' && Array.isArray(res.data)) {
-                        if (res.data.length > 0) {
-                            notes = res.data;
-                            localStorage.setItem('notes_chat_1gcx', JSON.stringify(notes));
-                            renderNotes();
-                        }
+                        notes = res.data;
+                        localStorage.setItem('notes_chat_1gcx', JSON.stringify(notes));
+                        renderNotes();
                         statusEl.innerText = "Tersinkron dengan Spreadsheet";
                     }
                 })
